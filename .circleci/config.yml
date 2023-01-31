@@ -94,10 +94,10 @@ workflows:
   # Name the workflow
   my_workflow:
       jobs:
-        #- create_infrastructure
-        - configure_inventory_file
-            #requires:
-            #  - create_infrastructure
+        - create_infrastructure
+        - configure_inventory_file:
+            requires:
+              - create_infrastructure
         - configure_infrastructure:
             requires:
               - configure_inventory_file
