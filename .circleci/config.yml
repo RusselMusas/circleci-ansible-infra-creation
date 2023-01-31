@@ -6,6 +6,10 @@ awsDockerImage: &awsDockerImage
   docker:
     - image: amazon/aws-cli
 
+pythonDockerImage: &pythonDockerImage
+  docker:
+    - image: cimg/python:3.11
+
 # Define the jobs
 jobs:
   create_infrastructure:
@@ -22,28 +26,78 @@ jobs:
               --stack-name my-infra-Stack-${CIRCLE_WORKFLOW_ID:0:5} \
               --region us-east-1
   
+  configure_inventory_file:
+    # Using Docker Image as Anchor
+    <<: *awsDockerImage
+    # Job steps
+    steps:
+      - checkout
+      - run:
+          name: Install tar utility
+          command: |
+            yum install -y tar gzip
+      - run:
+          name: Display inventory content
+          command: |
+            cat inventory
+      - run:
+          name: Add EC2 IP in inventory File
+          command: |
+            aws ec2 describe-instances \
+            --query 'Reservations[*].Instances[*].PublicIpAddress' \
+            --filters "Name=tag:Project,Values=udacity" \
+            --output text >> inventory
+      - run:
+          name: Display inventory content (IP Added)
+          command: |
+            cat inventory
+
+      - run:
+          name: Copy inventory file to home directory
+          command: |
+            cp inventory ~/
+
+      - persist_to_workspace:
+          root: ~/
+          paths:
+            - inventory
+
   configure_infrastructure: 
-    docker:
-      - image: python:3.7-alpine3.11
+    # Using Docker Image as Anchor
+    <<: *pythonDockerImage
     # Job steps
     steps:
       - checkout
       - add_ssh_keys:
               # You can get this ID in the section where you registered the SSH Key
-              fingerprints: ["72:41:d2:1c:f7:bd:15:59:33:95:22:c6:8a:05:50:48"] 
+              fingerprints: ["09:fd:5c:01:13:c9:cb:12:ca:4e:dc:4c:cd:5a:aa:ac"] 
       - run:
           name: Install Ansible
           command: |
-            apk add --update ansible
+            pip install ansible
+      
+      - attach_workspace:
+          at: ~/
+
+      - run:
+          name: Display inventory file content
+          command: |
+            cp ~/inventory inventory && cat inventory
+
       - run:
           name: Run Playbook and Configure server
           command: |
-            ansible-playbook -i inventory main-remote.yml
+            ansible-playbook -i ~/inventory main-remote.yml
 
 # Sequential workflow
 workflows:
   # Name the workflow
   my_workflow:
       jobs:
-        - create_infrastructure
-        #- configure_infrastructure
+        #- create_infrastructure
+        - configure_inventory_file
+            #requires:
+            #  - create_infrastructure
+        - configure_infrastructure:
+            requires:
+              - configure_inventory_file

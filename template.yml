@@ -10,6 +10,9 @@ Resources:
       KeyName: test-keypair1-us-east-01
       ImageId: 'ami-00874d747dde814fa' # you need to find out what instance types are available in your region - use https://cloud-images.ubuntu.com/locator/ec2/
       InstanceType: t3.micro
+      Tags:
+          - Key: Project
+            Value: udacity
   InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:

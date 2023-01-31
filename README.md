@@ -2,3 +2,4 @@
 My code in this project for:
     Circleci
     aws template cloudFormation
+    Inventory file
