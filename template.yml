@@ -1,18 +1,10 @@
 # Exercise - Create Infra
 AWSTemplateFormatVersion: 2010-09-09
-Description: Create Infra With CircleCI and Ansible 
+
+Description: Create Infra With CircleCI and Ansible
+
 Resources:
-  EC2Instance:
-    Type: 'AWS::EC2::Instance'
-    Properties:
-      SecurityGroups:
-        - !Ref InstanceSecurityGroup
-      KeyName: test-keypair1-us-east-01
-      ImageId: 'ami-00874d747dde814fa' # you need to find out what instance types are available in your region - use https://cloud-images.ubuntu.com/locator/ec2/
-      InstanceType: t3.micro
-      Tags:
-          - Key: Project
-            Value: udacity
+
   InstanceSecurityGroup:
     Type: 'AWS::EC2::SecurityGroup'
     Properties:
@@ -27,5 +19,19 @@ Resources:
           ToPort: '3000'
           CidrIp: 0.0.0.0/0
       Tags:
+          - Key: Project
+            Value: udacity
+
+  EC2Instance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SecurityGroups:
+        - !Ref InstanceSecurityGroup
+      KeyName: test-keypair1-us-east-01
+      ImageId: 'ami-00874d747dde814fa' # Replace with instance types are available in your region - use https://cloud-images.ubuntu.com/locator/ec2/
+      InstanceType: t3.micro
+      Tags:
+          - Key: Name
+            Value: ec2-server-instance
           - Key: Project
             Value: udacity

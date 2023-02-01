@@ -10,6 +10,10 @@ pythonDockerImage: &pythonDockerImage
   docker:
     - image: cimg/python:3.11
 
+alpineDockerImage: &alpineDockerImage
+  docker:
+    - image: alpine:latest
+
 # Define the jobs
 jobs:
   create_infrastructure:
@@ -37,30 +41,20 @@ jobs:
           command: |
             yum install -y tar gzip
       - run:
-          name: Display inventory content
-          command: |
-            cat inventory
-      - run:
-          name: Add EC2 IP in inventory File
+          name: Add EC2 IP in server-ip File
           command: |
             aws ec2 describe-instances \
             --query 'Reservations[*].Instances[*].PublicIpAddress' \
             --filters "Name=tag:Project,Values=udacity" \
-            --output text >> inventory
+            --output text >> ~/server-ip
       - run:
-          name: Display inventory content (IP Added)
+          name: Display server-ip content (IP Added)
           command: |
-            cat inventory
-
-      - run:
-          name: Copy inventory file to home directory
-          command: |
-            cp inventory ~/
-
+            cat ~/server-ip
       - persist_to_workspace:
           root: ~/
           paths:
-            - inventory
+            - server-ip
 
   configure_infrastructure: 
     # Using Docker Image as Anchor
@@ -75,32 +69,36 @@ jobs:
           name: Install Ansible
           command: |
             pip install ansible
-      
       - attach_workspace:
           at: ~/
-
       - run:
-          name: Display inventory file content
+          name: Copy server-ip content into inventory file
           command: |
-            cp ~/inventory inventory && cat inventory
-
+            cat ~/server-ip >> inventory && cat inventory
       - run:
           name: Run Playbook and Configure server
           command: |
-            ansible-playbook -i ~/inventory main-remote.yml
+            ansible-playbook -i inventory main-remote.yml
 
   # Exercise: Smoke Testing
   smoke_test:
-    docker:
-      - image: alpine:latest
+    # Using Docker Image as Anchor
+    <<: *alpineDockerImage
+    # Job steps
     steps:
+      - attach_workspace:
+          at: ~/
       - run: apk add --update curl
       - run:
-          name: smoke test
+          name: Display server-ip file content
           command: |
-            URL="https://blog.udacity.com/"
-            # Test if website exists
-            if curl -s --head ${URL} 
+            cat ~/server-ip
+      - run:
+          name: Run smoke test
+          command: |
+            URL=`cat ~/server-ip`:3000
+            echo "Test Website URL: $URL"
+            if curl -s --head ${URL}
             then
               echo "It worked!" && return 0
             else
@@ -112,11 +110,13 @@ workflows:
   # Name the workflow
   my_workflow:
       jobs:
-        # - create_infrastructure
-        # - configure_inventory_file:
-        #     requires:
-        #       - create_infrastructure
-        # - configure_infrastructure:
-        #     requires:
-        #       - configure_inventory_file
-        - smoke_test
+        - create_infrastructure
+        - configure_inventory_file:
+            requires:
+              - create_infrastructure
+        - configure_infrastructure:
+            requires:
+              - configure_inventory_file
+        - smoke_test:
+            requires:
+              - configure_infrastructure
