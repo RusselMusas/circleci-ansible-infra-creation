@@ -14,6 +14,19 @@ alpineDockerImage: &alpineDockerImage
   docker:
     - image: alpine:latest
 
+# Reusable tasks commands
+commands:
+  # Exercise - Rollback
+  destroy_environment:
+    steps:
+      - run:
+          name: Destroy environment
+          # ${CIRCLE_WORKFLOW_ID} is a Built-in environment variable 
+          # ${CIRCLE_WORKFLOW_ID:0:5} takes the first 5 chars of the variable CIRCLE_CI_WORKFLOW_ID 
+          when: on_fail
+          command: |
+            aws cloudformation delete-stack --stack-name my-infra-Stack-${CIRCLE_WORKFLOW_ID:0:5}
+
 # Define the jobs
 jobs:
   create_infrastructure:
@@ -29,13 +42,6 @@ jobs:
               --template-file template.yml \
               --stack-name my-infra-Stack-${CIRCLE_WORKFLOW_ID:0:5} \
               --region us-east-1
-  
-  configure_inventory_file:
-    # Using Docker Image as Anchor
-    <<: *awsDockerImage
-    # Job steps
-    steps:
-      - checkout
       - run:
           name: Install tar utility
           command: |
@@ -55,7 +61,10 @@ jobs:
           root: ~/
           paths:
             - server-ip
-
+      
+      # Destroy Env on_fail
+      - destroy_environment
+  
   configure_infrastructure: 
     # Using Docker Image as Anchor
     <<: *pythonDockerImage
@@ -79,16 +88,26 @@ jobs:
           name: Run Playbook and Configure server
           command: |
             ansible-playbook -i inventory main-remote.yml
+      
+      # Destroy Env on_fail
+      - destroy_environment
 
   # Exercise: Smoke Testing
   smoke_test:
     # Using Docker Image as Anchor
-    <<: *alpineDockerImage
+    <<: *awsDockerImage
     # Job steps
     steps:
+      - run:
+          name: Install tar utility
+          command: |
+            yum install -y tar gzip
+      - run:
+          name: Install curl
+          command: |
+            yum install -y curl
       - attach_workspace:
           at: ~/
-      - run: apk add --update curl
       - run:
           name: Display server-ip file content
           command: |
@@ -100,10 +119,13 @@ jobs:
             echo "Test Website URL: $URL"
             if curl -s --head ${URL}
             then
-              echo "It worked!" && return 0
+              echo "It worked!" && exit 0
             else
-              echo "It failed" && return 1
+              echo "It failed" && exit 1
             fi
+      
+      # Destroy Env on_fail
+      - destroy_environment
 
 # Sequential workflow
 workflows:
@@ -111,12 +133,9 @@ workflows:
   my_workflow:
       jobs:
         - create_infrastructure
-        - configure_inventory_file:
-            requires:
-              - create_infrastructure
         - configure_infrastructure:
             requires:
-              - configure_inventory_file
+              - create_infrastructure
         - smoke_test:
             requires:
               - configure_infrastructure
